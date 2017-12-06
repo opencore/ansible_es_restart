@@ -1,0 +1,8 @@
+---
+CLUSTER_STATUS_TIMEOUT: 10m
+CLUSTER_STATUS_REQUEST: 'http://localhost:{{ elasticsearch_port }}/_cluster/health?wait_for_status=green&timeout={{ CLUSTER_STATUS_TIMEOUT }}'
+DISABLE_ALLOCATION_REQUEST:  '{"transient":{"cluster.routing.allocation.enable":"none"}}'
+ENABLE_ALLOCATION_REQUEST: '{"transient":{"cluster.routing.allocation.enable":"all"}}'
+perform_flush: true
+ignore_failed_flush: false
+elasticsearch_port: 9000

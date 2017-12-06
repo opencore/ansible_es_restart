@@ -1,0 +1,57 @@
+---
+   - name: Ensure prerequisites are installed (RedHat)
+      yum: name={{ item }} state=present
+      with_items:
+        - python-httplib2
+        - libselinux-python
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure prerequisites are installed (Debian)
+      apt: name={{ item }} state=present
+      with_items:
+        - python-httplib2
+      when: ansible_os_family == "Debian"
+
+    - name: Disable allocation in elasticsearch
+      uri: url=http://localhost:{{ elasticsearch_port }}/_cluster/settings return_content=yes method=PUT body='{{DISABLE_ALLOCATION_REQUEST}}'
+      register: disable_response
+
+    - fail: msg=Cluster failed to acknowledge allocation disable request
+      when: "'{{disable_response.json.acknowledged}}' != 'True'"
+
+    - fail: msg=Settings change did not take effect
+      when: "'{{disable_response.json.transient.cluster.routing.allocation.enable}}' != 'none'"
+
+    - include: flush.yml
+      when: "{{ perform_flush }}"
+
+    - name: Stop elasticsearch node
+      service: name=elasticsearch state=stopped
+
+    # insert maintenance tasks here
+
+    - name: Start elasticsearch node
+      service: name=elasticsearch state=started
+
+    - name: Wait for elasticsearch to come back up
+      wait_for: port={{ elasticsearch_port }} delay=5
+
+    - name: Enable allocation in elasticsearch
+      uri: url=http://localhost:{{ elasticsearch_port }}/_cluster/settings return_content=yes method=PUT body='{{ENABLE_ALLOCATION_REQUEST}}'
+      register: enable_response
+
+    - fail: msg=Cluster failed to acknowledge allocation enable request
+      when: "'{{enable_response.json.acknowledged}}' != 'True'"
+
+    - fail: msg=Settings change did not take effect
+      when: "'{{enable_response.json.transient.cluster.routing.allocation.enable}}' != 'all'"
+
+    - name: Wait for Cluster status green
+      uri: url="{{ CLUSTER_STATUS_REQUEST }}" timeout=10000000000
+      register: status_response
+
+    - fail: msg=Cluster failed to return to status green within defined time limit
+      when: "'{{status_response.json.timed_out}}' != 'False'"
+
+    - fail: msg=Cluster responded with status not equal green
+      when: "'{{status_response.json.status}}' != 'green'"
